@@ -24,8 +24,15 @@ val scrape: Env.t -> module_type -> module_type
 val scrape_for_functor_arg: Env.t -> module_type -> module_type
         (* Remove aliases in a functor argument type *)
 val scrape_for_type_of:
+  ?strengthen:bool ->
   remove_aliases:bool -> Env.t -> module_type -> module_type
-        (* Process type for module type of *)
+        (* Process type for module type of.
+           [strengthen] (default [true]) controls whether the resulting
+           signature is strengthened against the path of the alias being
+           followed. Pass [false] to keep abstract types abstract — used
+           in [transl_modtype_functor_arg] for [Pmty_typeof] in functor
+           parameters, where strengthening would prevent applying the
+           functor to siblings. *)
 val freshen: scope:int -> module_type -> module_type
         (* Return an alpha-equivalent copy of the given module type
            where bound identifiers are fresh. *)

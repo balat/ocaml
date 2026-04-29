@@ -158,7 +158,7 @@ and make_aliases_absent_sig sg =
   | sigelt :: rem ->
       sigelt :: make_aliases_absent_sig rem
 
-let scrape_for_type_of env pres mty =
+let scrape_for_type_of ?(do_strengthen=true) env pres mty =
   let rec loop env path mty =
     match mty, path with
     | Mty_alias path, _ -> begin
@@ -167,7 +167,7 @@ let scrape_for_type_of env pres mty =
           loop env (Some path) md.md_type
         with Not_found -> mty
       end
-    | mty, Some path ->
+    | mty, Some path when do_strengthen ->
         strengthen ~aliasable:false env mty path
     | _ -> mty
   in
@@ -529,7 +529,7 @@ let scrape_for_functor_arg env mty =
   in
   mty
 
-let scrape_for_type_of ~remove_aliases env mty =
+let scrape_for_type_of ?(strengthen=true) ~remove_aliases env mty =
   if remove_aliases then begin
     let excl = collect_arg_paths mty in
     let exclude id _p = Ident.Set.mem id excl in
@@ -539,7 +539,9 @@ let scrape_for_type_of ~remove_aliases env mty =
     in
     mty
   end else begin
-    let _, mty = scrape_for_type_of env Mp_present mty in
+    let _, mty =
+      scrape_for_type_of ~do_strengthen:strengthen env Mp_present mty
+    in
     mty
   end
 

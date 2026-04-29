@@ -257,6 +257,14 @@ Working version
   counter-example search space.
   (Florian Angeletti, review by Gabriel Scherer)
 
+- #XXXXX: Don't strengthen abstract types when `module type of M` is used
+  directly as a functor parameter: they must stay abstract so that the
+  functor can be applied to siblings of `M` reached through the same alias
+  chain (a pattern that arises in dune's wrapped libraries). Module
+  ascriptions `module N : module type of M = ...` still strengthen
+  (as documented by `gatien_baron_20131019_ok`).
+  (Vincent Balat)
+
 OCaml 5.5.0
 -----------
 

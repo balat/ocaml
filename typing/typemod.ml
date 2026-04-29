@@ -192,9 +192,10 @@ let type_open_descr ?used_slot ?toplevel env sod =
 
 (* Forward declaration, to be filled in by type_module_type_of *)
 let type_module_type_of_fwd :
-    (Env.t -> Parsetree.module_expr ->
+    (?strengthen:bool ->
+      Env.t -> Parsetree.module_expr ->
       Typedtree.module_expr * Types.module_type) ref
-  = ref (fun _env _m -> assert false)
+  = ref (fun ?strengthen:_ _env _m -> assert false)
 
 (* Additional validity checks on type definitions arising from
    recursive modules *)
@@ -1513,15 +1514,24 @@ let mksig desc env loc =
 
 (* let signature sg = List.map (fun item -> item.sig_type) sg *)
 
-let rec transl_modtype env smty =
+let rec transl_modtype ?(in_functor_arg=false) env smty =
   Builtin_attributes.warning_scope smty.pmty_attributes
-    (fun () -> transl_modtype_aux env smty)
+    (fun () -> transl_modtype_aux ~in_functor_arg env smty)
 
 and transl_modtype_functor_arg env sarg =
-  let mty = transl_modtype env sarg in
+  (* When the parameter of a functor is exactly [module type of M], it
+     is meant to describe modules with the same shape as M, not M
+     itself. Disable strengthening so that abstract types stay
+     abstract, letting the functor be applied to siblings with the
+     same shape. Without this, paths going through a module alias (as
+     introduced by dune's wrapped libraries) reintroduce strengthening
+     via [scrape_for_type_of], making such applications fail. Module
+     ascriptions and [module type of] nested deeper in the parameter
+     signature keep strengthening as before. *)
+  let mty = transl_modtype ~in_functor_arg:true env sarg in
   {mty with mty_type = Mtype.scrape_for_functor_arg env mty.mty_type}
 
-and transl_modtype_aux env smty =
+and transl_modtype_aux ~in_functor_arg env smty =
   let loc = smty.pmty_loc in
   match smty.pmty_desc with
     Pmty_ident lid ->
@@ -1581,7 +1591,8 @@ and transl_modtype_aux env smty =
         smty.pmty_attributes
   | Pmty_typeof smod ->
       let env = Env.in_signature false env in
-      let tmty, mty = !type_module_type_of_fwd env smod in
+      let strengthen = not in_functor_arg in
+      let tmty, mty = !type_module_type_of_fwd ~strengthen env smod in
       mkmty (Tmty_typeof tmty) mty env loc smty.pmty_attributes
   | Pmty_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
@@ -3160,7 +3171,7 @@ and normalize_signature_item = function
 
 (* Extract the module type of a module expression *)
 
-let type_module_type_of env smod =
+let type_module_type_of ?(strengthen=true) env smod =
   let remove_aliases =
     Builtin_attributes.has_remove_aliases smod.pmod_attributes in
   let tmty =
@@ -3176,7 +3187,9 @@ let type_module_type_of env smod =
         let me, _shape = type_module env smod in
         me
   in
-  let mty = Mtype.scrape_for_type_of ~remove_aliases env tmty.mod_type in
+  let mty =
+    Mtype.scrape_for_type_of ~strengthen ~remove_aliases env tmty.mod_type
+  in
   (* PR#5036: must not contain non-generalized type variables *)
   check_nongen_modtype env smod.pmod_loc mty;
   tmty, mty
@@ -3305,7 +3318,7 @@ let () =
   Typecore.type_module := type_module_alias;
   Typecore.type_str_item := type_str_item;
   Typetexp.transl_modtype_longident := transl_modtype_longident;
-  Typetexp.transl_modtype := transl_modtype;
+  Typetexp.transl_modtype := (fun env smty -> transl_modtype env smty);
   Typecore.type_open := type_open_ ?toplevel:None;
   Typetexp.type_open := type_open_ ?toplevel:None;
   Typecore.type_open_decl := type_open_decl;
